@@ -1,0 +1,13 @@
+Package: lumi
+Type: Package
+Title: BeadArray Specific Methods for Illumina Microarrays
+Version: 1.6.3
+Date: 2008-09-17
+Depends: R (>= 2.4.0), affy, mgcv (>= 1.4-0), methods
+Suggests: Biobase (>= 1.12.0), annotate, beadarray, limma, vsn, lumiBarnes, lumiHumanAll.db, genefilter, geneplotter, RColorBrewer
+Author: Pan Du, Warren Kibbe, Simon Lin
+Maintainer: Pan Du <dupan@northwestern.edu>
+Description: The lumi package provides an integrated solution for the Illumina microarray data analysis. It includes functions of Illumina BeadStudio data input, quality control, BeadArray-specific variance stabilization, normalization and gene annotation at the probe level.
+License: LGPL version 2 or newer
+biocViews: Microarray, OneChannel, Preprocessing
+Packaged: Thu Sep 18 02:54:06 2008; biocbuild

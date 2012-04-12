@@ -1,0 +1,411 @@
+% -*- mode: noweb; noweb-default-code-mode: R-mode; -*-
+%\VignetteIndexEntry{lumi}
+%\VignetteKeywords{Illumina, BeadArray, Microarray preprocessing}
+%\VignetteDepends{lumi, lumiBarnes, affy, limma, Biobase, vsn, genefilter, RColorBrewer}
+%\VignettePackage{lumi}
+
+%% 
+%% To use the 'cache' capabilities of weaver, 
+%% library("weaver"); Sweave("lumi_VST_evaluation.Rnw", driver=weaver)
+%%
+%%
+
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath,pstricks}
+\usepackage{hyperref}
+\usepackage[authoryear,round]{natbib}
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textit{#1}}}
+\newcommand{\Rclass}[1]{{\textit{#1}}}
+\newcommand{\Rmethod}[1]{{\textit{#1}}}
+
+\SweaveOpts{keep.source=TRUE} 
+
+\author{Pan Du$^1$\footnote{dupan@northwestern.edu}, Simon Lin$^1$\footnote{s-lin2@northwestern.edu},  Wolfgang Huber$^2$\footnote{huber@ebi.ac.uk}, Warrren A. Kibbe$^1$\footnote{wakibbe@northwestern.edu}}
+\begin{document}
+
+\setkeys{Gin}{width=1\textwidth} 
+
+\title{Evaluation of VST algorithm in lumi package}
+\maketitle
+\begin{center}$^1$Robert H. Lurie Comprehensive Cancer Center \\ Northwestern University, Chicago, IL, 60611, USA
+\end{center}
+\begin{center}$^2$EBI/EMBL, Cambridge, UK
+\end{center}
+
+\tableofcontents
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Introduction} 
+
+Variance stabilization is critical for the subsequent statistical inference to identify differentially expressed genes from microarray data. We devised a variance-stabilizing transformation (VST) by taking advantages of larger number of technical replicates available on the Illumina microarray. Here we use the Barnes data set, which has been packaged as lumiBarnes data package at the Bioconductor Experiment Data web page, to evaluate the VST algorithm. We will compare VST with popular base-2 logarithm transform and VSN method. To facilitate the comparison, we used popular quantile normalization for both VST and log2 transformed data.
+
+\section{Required packages and data preprocessing} 
+The evaluation requires the users to install packages: \Rpackage{lumi}, \Rpackage{vsn}, \Rpackage{genefilter}, \Rpackage{limma} and \Rpackage{lumiBarnes} (Experiment Data package). First, we need to load these packages:
+
+<<libraries,echo=TRUE,results=hide>>=
+library("lumi")
+library("vsn")
+library("genefilter")
+library("geneplotter")
+library("RColorBrewer")
+library("limma")
+library("lumiBarnes")
+set.seed(0xbadbeef)
+## Load the Barnes data set
+data("lumiBarnes")
+@
+
+We select the Barnes data [2] as the evaluation data set. For convenience, we created a Bioconductor experiment data package  \Rpackage{lumiBarnes}. The data is kept in a LumiBatch Object.  Because the Barnes data utilized the pre-released version of  HumanRef-8 version 1 BeadChip, some probes on the chip do not exist in the public released HumanRef-8 version 1 BeadChip. For annotation consistence,  these probes was removed in the \Rpackage{lumiBarnes} package. For the interested users, the raw data can be downloaded from the paper companion website: \verb+http://www.bioinformatics.ubc.ca/pavlidis/lab/platformCompare/+. 
+
+
+Before preprocessing the data, we first compare the methods of fitting the relations between probe standard deviation and mean. The detailed implementation of methods is described in [1]. The results of using 'linear' and 'quadratic' method are shown in Figure \ref{fig:figFittingLinear} and Figure \ref{fig:figFittingQuad} respectively. Compare Figure \ref{fig:figFittingLinear} and Figure \ref{fig:figFittingQuad}, we can see the 'quadratic' method over-fits the relations in the high expression range. As a result, VST uses 'linear' method by default to get more robust results. 
+
+\begin{figure}
+\centering
+<<figFittingLinear,fig=TRUE, width=12, height=6, quiet=TRUE, echo=TRUE >>=
+temp <- lumiT(lumiBarnes[,1], fitMethod='linear', ifPlot=TRUE)
+@
+\caption{(A) The relations between probe standard deviation and mean by linear fitting. (B) Log2 vs. VST transformed values. The green line in figure A is the fitted curve; the green dotted line in figure B represents Log2 = VST. }
+\label{fig:figFittingLinear}
+\end{figure} 
+
+\begin{figure}
+\centering
+<<figFittingQuad,fig=TRUE, width=12, height=6, quiet=TRUE, echo=TRUE>>=
+temp <- lumiT(lumiBarnes[,1], fitMethod='quadratic', ifPlot=TRUE)
+@
+\caption{(A) The relations between probe standard deviation and mean by linear fitting. (B) Log2 vs. VST transformed values. The green line in figure A is the fitted curve; the green dotted line in figure B represents Log2 = VST. }
+\label{fig:figFittingQuad}
+\end{figure} 
+
+
+<<load,echo=TRUE,results=hide>>=
+## Select the blood and placenta samples
+selChip = !is.na(lumiBarnes$pctBlood)
+x.lumi <- lumiBarnes[, selChip]
+presentCount <- detectionCall(x.lumi)
+
+## Since the Barnes data was not background removed, we will do background adjustment first.
+## The background estimation will be based on the control probe information. 
+##  As the old version lumiBarnes library does not include controlData slot, we will check it first.
+if (nrow(x.lumi@controlData) == 0) {
+	## We will use the control probe information in the example.lumi in the updated lumi package
+	data(example.lumi)
+	x.lumi@controlData <- example.lumi@controlData
+}
+
+x.lumi <- lumiB(x.lumi, method='bgAdjust')
+
+repl1 <- which(x.lumi$replicate=="A")
+repl2 <- which(x.lumi$replicate=="B")
+stopifnot(sum(selChip)==12L, length(repl1)==6L, length(repl2)==6L)
+@ 
+
+Preprocess:
+<<preprocess,echo=TRUE,results=hide,cache=TRUE>>=
+## VST transform and Quantile normalization
+x.lumi.vst <- lumiT(x.lumi)
+x.lumi.vst.quantile <- lumiN(x.lumi.vst, method='quantile')
+
+
+## log2 transform and Quantile normalization
+x.lumi.log <- lumiT(x.lumi, method='log2')
+x.lumi.log.quantile <- lumiN(x.lumi.log, method='quantile')
+
+
+## VSN normalization: use lts.quantile=0.5 since in the blood/placenta
+##  comparison more genes are differentially expressed than what is
+##   expected by the default of 0.9.
+x.lumi.vsn <- lumiN(x.lumi, method='vsn', lts.quantile=0.5)
+
+
+## Add the vsn based on technical replicates
+vsn.pair <- exprs(x.lumi)
+cor.i <- NULL
+for(i in 1:length(repl1)) {
+	vsn.pair[, c(i, i+length(repl1))] <- exprs(vsn2(vsn.pair[, c(repl1[i], repl2[i])], verbose=FALSE))
+}
+# vsn.quantile <- normalize.quantiles(vsn.pair)
+# rownames(vsn.quantile) <- rownames(vsn.pair)
+# colnames(vsn.quantile) <- colnames(vsn.pair)
+
+
+normDataList <- list('VST-Quantile'=exprs(x.lumi.vst.quantile), 
+                    'Log2-Quantile'=exprs(x.lumi.log.quantile),
+	            'VSN'=exprs(x.lumi.vsn))		# , 'VSN-Quantile'=vsn.quantile)
+
+## scatter plots: 
+## library("geneplotter")
+## pairs(exprs(x.lumi.vsn), panel=function(...){par(new=TRUE);smoothScatter(..., nrpoints=0)})
+@
+  
+
+\section{Evaluation of the VST algorithm} 
+
+\subsection{Correlation between the technical replicate microarrays} 
+A good preprocessing method will improve the correlation between the technical replicate microarrays. Here will calculate the correlation between six pairs of technical replicate chips and plot them as the box plot, as shown in Figure \ref{fig:chipCor}. We can see VST improves the consistency between replicates.
+%
+<<chipCorList>>=
+## Check the correlation between technique replicates
+tempDataList <- c(normDataList, list(vsn.pair))
+names(tempDataList) <- c(names(normDataList), 'VSN-techReplicate')
+chipCorList <- matrix(as.numeric(NA), nrow=length(repl1), ncol=length(tempDataList))
+colnames(chipCorList) <- names(tempDataList)
+for (i in seq(along= tempDataList))
+  for (j in seq(along=repl1))
+    chipCorList[j,i] = cor(tempDataList[[i]][, c(repl1[j], repl2[j])])[1,2]
+@
+
+\begin{figure}
+\centering
+<<figboxplot,fig=TRUE, width=8, height=8, quiet=TRUE, echo=FALSE>>=
+labels <- colnames(chipCorList)
+## set the margin of the plot
+mar <- c(max(nchar(labels))/2 + 4.5, 5, 5, 3)
+oldpar = par(xaxt='n', mar=mar)
+boxplot(chipCorList ~ col(chipCorList),  xlab='', 
+        ylab='Correlation between technique replicate chips',
+        col='skyblue')
+par(xaxt='s')
+axis(1, at=1:ncol(chipCorList), labels=labels, tick=TRUE, las=2)
+par(oldpar)
+@
+\caption{Comparison of the correlation between technical replicate chips after preprocessing. The VSN-techReplicate method performed the VSN within each pair of technical replicate samples and then calculated their correlations.}
+\label{fig:chipCor}
+\end{figure} 
+
+\subsection{Variance stabilizing between the technique replicate microarrays} 
+A good variance stabilizing method should stabilize the variance between the technique replicates. Here we plot the mean and standard deviation relations between a pair of technique replicates, as shown in Figure \ref{fig:techRep}. Users can select other pairs of replicates and plot the pictures.
+
+
+\begin{figure}
+\centering
+<<figmeanSdPlot,fig=TRUE, width=6, height=10, quiet=TRUE, echo=FALSE>>=
+## select the technique replicates
+selChip <-  c(repl1[1],repl2[1]) 
+oldpar <- par(mfrow=c(length(normDataList) + 1,1))
+for (i in 1:length(normDataList)) {
+  meanSdPlot(normDataList[[i]][, selChip], ylab='Standard deviation',
+      main=names(normDataList)[i], ylim=c(0,1)) 
+}
+meanSdPlot(vsn.pair[, selChip], ylab='Standard deviation',
+      main='VSN-techReplicate ', ylim=c(0,1))
+par(oldpar)
+@
+\caption{Mean and standard deviation relations of the technical replicate 
+microarrays \Sexpr{sampleNames(x.lumi)[selChip[1]]} and
+\Sexpr{sampleNames(x.lumi)[selChip[2]]}. The VSN-techReplicate  method performed the VSN only within the pair of technical replicate samples.}
+\label{fig:techRep}
+\end{figure} 
+
+
+
+\subsection{Variation within replicates vs. variation between conditions}
+To assess the signal to noise ratio, we assess
+\[
+\frac{\sigma^2_{\mbox{\scriptsize between groups}}}{\sigma^2_{\mbox{\scriptsize within groups}}}.
+\]
+For $n$ groups, by its generalisation, the $F$-statistic.
+%
+
+<<fstatistic>>=
+fac <- factor(paste(x.lumi$pctBlood, x.lumi$pctPlacenta, sep=":"))
+rf <- lapply(normDataList, function(x) rowFtests(x[presentCount > 0,], fac=fac))
+ef <- sapply( rf, function(x) ecdf(x$p.value))
+@ 
+
+The result is shown in Figure~\ref{fig:fstat}. We can see the difference among these methods are not big, however, the VST is consistently better than the log2 and VSN methods.
+
+\begin{figure}
+\centering
+<<figfstat,fig=TRUE,echo=FALSE,width=8,height=6>>=
+pcol <- seq(along= normDataList) 
+plty <- (1:(1 + length(normDataList))) [-3] 
+plwd <- 1.5
+x <- seq(0, 0.05, by=0.0001); x = x[-1]
+plot(x, ef[[1]](x), type='l', lwd=plwd, lty=plty[1], col=pcol[1],
+	main="Cumulative distribution of F-test p-value", xlab="F-test p-value", ylab="Empirical probability", log='x')
+for (i in 2:length(ef)) {
+	lines(x, ef[[i]](x), lwd=plwd, lty=plty[i], col=pcol[i])
+}
+legend(0.01, 0.25, names(normDataList), lwd=plwd, lty=plty, col=pcol)
+@ 
+\caption{Cumulative distribution functions of $p$-values obtained 
+from a) reporter-wise $F$-tests (by factor \Robject{fac}). 
+These are monotonous measures of the ratio between variation within replicates 
+and variation between conditions, or in other words, the signal-to-noise ratio.}
+\label{fig:fstat}
+\end{figure} 
+
+
+\subsection{Correlation between the expression profiles and dilution profile}
+Here we want to compare the correlation between the expression profiles and dilution profile. Because these concordant genes are more likely to be related with the dilution process, a good transformation should improve or at least not worsen the correlation of the expression profiles and dilution profile. Figure~\ref{fig:histCorrelation} shows, VST transformed data improve this correlation because there are more probes with high correlation (the absolute values of correlation coefficient close to 1).
+
+<<Expression and dilution profile correlation>>=
+modelProfile1 <- c(100, 95, 75, 50, 25, 0, 100, 95, 75, 50, 25, 0)
+corrList <- lapply(normDataList, function(x) {
+	x <- x[presentCount > 0, ]
+	corr1 <- apply(x, 1, cor, y=modelProfile1)
+	return(corr1)
+	} )
+@
+
+\begin{figure}
+\centering
+<<histCorrelation,fig=TRUE,echo=FALSE,width=6,height=6>>=
+freqMatrix <- NULL
+breaks <- NULL
+for (i in 1:length(corrList)) {
+	hist.i <- hist(abs(corrList[[i]]), 30, plot=FALSE)
+	breaks <- cbind(breaks, hist.i$breaks)
+	freqMatrix <- cbind(freqMatrix, hist.i$counts)
+}
+freqMatrix <- rbind(freqMatrix, freqMatrix[nrow(freqMatrix),])
+matplot(breaks, freqMatrix, type='s', lty=plty, col=pcol, lwd=plwd, ylab='Frequency', xlab='Absolute values of correlation coefficients')
+legend(x=0.1, y=2800, legend=names(normDataList), lty=plty, col=pcol, lwd=plwd)
+@ 
+\caption{Compare the histogram of the correlation between the expression profiles and dilution profile}
+\label{fig:histCorrelation}
+\end{figure} 
+
+\subsection{Evaluation based on the identification of differentially expressed genes} 
+For better evaluation, we want to evaluate the VST algorithm based on the detection of differentially expressed genes. First, we want to see the percentage of concordant probes (a probe with a correlation coefficient larger than 0.8 between the normalized intensity profile and the real dilution profile (six dilution ratios with two replicates at each dilution)) among the most significant probes (ranking based on F-test p-values). The result is shown in Figure~\ref{fig:fstatCor}. We can see the VST processed data has obviously higher percentage of concordant probes than the log2 and VSN methods.
+
+<<fstatistic concordance percentage>>=
+topNumList <- seq(50, 3000, by=100)
+corTh <- 0.8
+highCorrNumMatrix <- NULL
+for (i in 1:length(rf)) {
+	probeList <- names(rf[[i]]$p.value)
+	ordProbe.i <- probeList[order(abs(rf[[i]]$p.value), decreasing=FALSE)]
+	corr1 <- corrList[[i]]
+	matchNum.j <- NULL
+	for (topNum.j in topNumList) {
+		topProbe.j <- ordProbe.i[1:topNum.j]
+		matchNum.j <- c(matchNum.j, length(which(abs(corr1[topProbe.j]) > corTh)))
+	}
+	highCorrNumMatrix <- cbind(highCorrNumMatrix, matchNum.j)
+}
+rownames(highCorrNumMatrix) <- topNumList
+colnames(highCorrNumMatrix) <- names(rf)
+@ 
+
+The result is shown in Figure~\ref{fig:fstatCor}. We can see the difference among these methods are not big, however, the VST is consistently better than the log2 and VSN methods.
+
+\begin{figure}
+\centering
+<<figfstatCor,fig=TRUE,echo=FALSE,width=8,height=6>>=
+matplot(topNumList, (100 * highCorrNumMatrix/(topNumList %*% t(rep(1,ncol(highCorrNumMatrix))))),
+ 	type='l', xlab='Number of most significant probes by ranking their p-values (F-test)', 
+	ylab='Percentage of concordant probes (%)', 
+        lty=plty, col=pcol, lwd=plwd, ylim=c(50,100))
+legend(x=2000, y=70, legend=colnames(highCorrNumMatrix), lty=plty, col=pcol, lwd=plwd)
+@ 
+\caption{Cumulative distribution functions of $p$-values obtained 
+from a) reporter-wise $F$-tests (by factor \Robject{fac}). 
+These are monotonous measures of the ratio between variation within replicates 
+and variation between conditions, or in other words, the signal-to-noise ratio.}
+\label{fig:fstatCor}
+\end{figure} 
+
+
+Next, we selected the differentially expressed genes by comparing two conditions. The p-values will be estimated by the Bioconductor \Rpackage{limma} package. To better evaluate the overall performance, we first ranked the probes with their p-values from low to high, then calculate the percentage of concordant probes among different number of most significant probes, as shown in Figure \ref{fig:limmaConcordance}. The result indicates that VST-quantile outperforms Log2.Quantile in terms of the concordance evaluation.
+
+
+Identify the differentially expressed genes by using limma package:
+<<fitList.limma,echo=TRUE>>=
+## Select the comparing chip index
+sampleInfo <- pData(phenoData(x.lumi))
+sampleType <- paste(sampleInfo[,'pctBlood'], sampleInfo[,'pctPlacenta'], sep=':')
+sampleType <- paste('c', sampleType, sep='')
+## Comparing index
+## used in the paper (the most challenging comparison):
+compareInd <- c(repl1[1:2], repl2[1:2])  	
+compareType <- sampleType[compareInd]
+fitList.limma <- NULL
+for (i in 1:length(normDataList)) {
+	selDataMatrix <- normDataList[[i]]
+	selDataMatrix <- selDataMatrix[presentCount > 0, ]
+	selProbe <- rownames(selDataMatrix)
+	compareMatrix <- selDataMatrix[, compareInd]
+	
+	design <- model.matrix(~ 0 + as.factor(compareType))
+	colnames(design) <- c('A', 'B')
+	fit1 <- lmFit(compareMatrix, design)
+	contMatrix <- makeContrasts('A-B'=A - B, levels=design)
+	fit2 <- contrasts.fit(fit1, contMatrix)
+	fit <- eBayes(fit2)
+	fitList.limma <- c(fitList.limma, list(fit))
+}
+names(fitList.limma) <- names(normDataList)
+@
+
+Estimate the number of concordance probes (a probe with a correlation coefficient larger than 0.8 between the normalized intensity profile and the real dilution profile (six dilution ratios with two replicates at each dilution)) among the top differentially expressed genes (ranked based on p-values estimated by \Rpackage{limma}).:
+
+<<highCorrNumMatrix,echo=TRUE, quite=TRUE>>=
+## Check the correlation of the top differentiated probes based on the limma results 
+## rank the probes based on the p-values of limma result
+fitList <- fitList.limma
+topNumList <- c(30, seq(35, 1000, by=30))
+corTh <- 0.8
+highCorrNumMatrix <- NULL
+for (i in 1:length(fitList)) {
+	probeList <- rownames(fitList[[i]]$p.value)
+	ordProbe.i <- probeList[order(abs(fitList[[i]]$p.value[,1]), decreasing=FALSE)]
+	profileMatrix <- normDataList[[i]][ordProbe.i, ]
+
+	modelProfile1 <- c(100, 95, 75, 50, 25, 0, 100, 95, 75, 50, 25, 0)
+	corr1 <- apply(profileMatrix, 1, cor, y=modelProfile1)
+	names(corr1) <- ordProbe.i
+	matchNum.j <- NULL
+	for (topNum.j in topNumList) {
+		topProbe.j <- ordProbe.i[1:topNum.j]
+		matchNum.j <- c(matchNum.j, length(which(abs(corr1[topProbe.j]) > corTh)))
+	}
+	highCorrNumMatrix <- cbind(highCorrNumMatrix, matchNum.j)
+}
+rownames(highCorrNumMatrix) <- topNumList
+colnames(highCorrNumMatrix) <- names(fitList)
+@
+
+\begin{figure}
+\centering
+<< figLimmaConcordance, fig=true, width=8, height=6, quiet=TRUE, echo=FALSE>>=
+matplot(topNumList, (100 * highCorrNumMatrix/(topNumList %*% t(rep(1,ncol(highCorrNumMatrix))))),
+ 	type='l', xlab='Number of most significant probes by ranking their p-values', 
+	ylab='Percentage of concordant probes (%)', 
+        lty=plty, col=pcol, lwd=plwd, ylim=c(0,100))
+legend(x=700, y=50, legend=colnames(highCorrNumMatrix), lty=plty, col=pcol, lwd=plwd)
+@
+\caption{The concordance between the expression and dilution profiles of the selected differentially expressed genes}
+\label{fig:limmaConcordance}
+\end{figure} 
+
+
+
+\section{Conclusion}
+
+The users can select different samples for the comparison and change the cutoff thresholds in the evaluation. The results should be similar, i.e., the VST algorithm is better than the log2 transformation and VSN for this evaluation data set because it utilizes the mean and standard deviation information at the bead-level.
+
+%\bibliographystyle{plainnat}
+%\bibliography{lumi}
+
+\section{Session Info}
+<<sessionInfo, results=tex, print=TRUE>>=
+toLatex(sessionInfo())
+@ 
+
+
+
+\section{Reference}
+
+1. Lin, S.M., Du, P., Kibbe, W.A.,  "Model-based Variance-stabilizing Transformation for Illumina Mi-croarray Data", under review
+
+2. Barnes, M., Freudenberg, J., Thompson, S., Aronow, B. and Pav-lidis, P. (2005) "Experimental comparison and cross-validation of the Affymetrix and Illumina gene expression analysis platforms", Nucleic Acids Res, 33, 5914-5923.
+
+
+\end{document}

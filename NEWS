@@ -1,0 +1,201 @@
+-----------------------------------------------------
+version 1.5.15-1.5.16
+release data: 02/08/2008
+1. The default normalization method is changed as 'quantile' instead of 'rsn'.
+2. update lumiR for the changes of BeadStudio output.
+
+
+-----------------------------------------------------
+version 1.5.10-1.5.14
+release data: 02/03/2008
+1. lumiR can also input the annotation information outputted by BeadStuio
+2. Add plot functions dealing with the control probe data outputted by BeadStudio.
+
+
+-----------------------------------------------------
+version 1.5.1-1.5.9
+release data: 12/05/2007
+1. Add functions dealing with the control probe data outputted by BeadStudio.
+2. Extended VST algorithm for processing the Affymetrix data.
+3. Add SSN (simple scaling normalization) algorithm for conservative normalization.
+4. other updates of help and vignette
+
+
+-----------------------------------------------------
+version 1.3.27-1.3.37
+release data: 09/30/2007
+1. update the code to make vst accept negative values.
+2. fixed bug of combine and subset functions dealing with controlData slot
+3. add bg.Adjust background adjustment function to deal with the control probe information
+4. add lumiR.batch function to input multiple files in batch
+5. remove stdCorrection parameter from lumiR to lumiT, which converts the standard error of the mean to standard deviation in variance stabilization.
+6. other small updates of help and vignette
+
+Thanks Wei Shi and Gordon Smith for reporting problems and suggestions for improvements.
+
+-----------------------------------------------------
+version 1.3.18-1.3.26
+release data: 08/25/2007
+1. Updated the vst function in version 1.3.25. (estimate the c3 based on the background probes).
+2. Updated the inverseVST and other related functions to allow the recover to the raw scale of the preprocessed data.
+3. Added the evaluation of VST vignette
+3. Updated the lumi vignette
+
+
+-----------------------------------------------------
+version 1.3.16-1.3.17
+release data: 07/11/2007
+1. Add the correction of the STDEV column values of the BeadStudio output file (transfer the standard error of the mean as the standard deviation).
+2. Updated the vignette.
+
+Thanks Gordon Smith provided the information of STDEV column of BeadStudio output file.
+
+-----------------------------------------------------
+version 1.3.12-1.3.15
+release data: 06/29/2007
+1. Updated the vignette with added performance evaluation section.
+2. Added "dec" option in lumiR function
+3. Add density funciton
+4. Allow user to select and customize the input columns of BeadStudio output files
+
+Thanks Renee McElhaney for checking the vignette, Martin Morgan, Ingrid H. G. Østense and Michal Blazejczyk for the suggestion or reporting problems.
+
+
+-----------------------------------------------------
+version 1.3.11
+release data: 06/16/2007
+Add the annotation library information when run addNuId2lumi function.
+
+Thanks Vincent Carey (Harvard) for the suggestion.
+
+-----------------------------------------------------
+versions 1.3.0-1.3.10
+release date: 04/22/2007-06/15/2007
+Major updates:
+1. All the major functions compatible with ExpressionSet class
+2. presentCount was removed from the featureData. use detectionCall function to estimate presentCount
+3. lumiR function now allows user to select the input data columns
+4. Add lumiB function for background correction
+5. lumiExpresso function to encapsulate all preprocessing functions
+6. Vignette tutorial has major updates.
+
+Thanks Ryan Gordon, DeokHoon Kim, Danilo Licastro, Matthias Kohl, Ezhou Lori Long (NIH), Sean Davis (NIH) and others for the suggestions and reporting problems.
+
+-----------------------------------------------------
+version 1.1.7
+release date: 04/22/2007
+
+1. Major updates of the vignette.
+2. A simpleOutput option was added for the lumiT function.
+3. Added nuID and targetID/probeID mapping functions.
+
+-----------------------------------------------------
+version 1.1.4-6
+release date: 04/17/2007
+
+1. Updated lumiR function for better robustness.
+2. Added subset parameter to all plot functions.
+3. Add 'forcePositive' method to the lumiB function to avoid negative values.
+4. Other related updates.
+
+-----------------------------------------------------
+version 1.1.3
+release date: 04/12/2007
+
+1. Fixed the bug of combine function.
+
+Thanks Jiexin Zhang (M.D. Anderson Cancer Center) finding the bug.
+
+-----------------------------------------------------
+version 1.1.2
+release date: 04/11/2007
+
+1. Updated lumiR to compatible with BeadStudio output file without header
+
+-----------------------------------------------------
+version 1.1.0
+release date: 03/24/2007
+
+1. Updated lumiR to compatible with BeadStudio 3.0 output format
+2. Removed LumiQC class and added QC slot in the LumiBatch class
+3. Updated the functions related with updates 1 and 2
+
+Thanks Sean Davis (NIH) and Michael Stevens (Washington University) for providing BeadStudio 3.0 files and testing.
+
+-----------------------------------------------------
+version 1.0.10
+release date: 03/20/2007
+
+1. Updated lumiN.rsn to allow the targetArray to be vector or LumiBatch object with one sample
+2. Update the help documents
+
+Thanks Jiexin Zhang (M.D. Anderson Cancer Center) providing the suggestion of targetArray.
+
+-----------------------------------------------------
+version 1.0.9
+release date: 03/18/2007
+
+1. Updated lumiN to make it accept ExpressionSet inherited object or data matrix
+2. Update the some help files
+
+
+-----------------------------------------------------
+version 1.0.7
+release date: 02/20/2007
+
+1. Updated the vignette and lumiN.rsn function
+
+-----------------------------------------------------
+version 1.0.6
+release date: 02/15/2007
+
+1. Updated the combine method of LumiBatch class, addNuId2lumi, lumiR for better adaptiveness.
+
+
+-----------------------------------------------------
+version 1.0.5
+release date: 02/14/2007
+
+1. Updated lumiR function to allow directly adding nuID when reading the data;
+2. Updated addNuId2lumi to add the tracking history:
+
+-----------------------------------------------------
+version 1.0.4
+release date: 02/08/2007
+
+1. Updated lumiR function to make it compatible with R 2.5;
+2. Updated addNuId2lumi and lumiN function to fix some typos.
+
+Thanks Jean-Eudes DAZARD (Case Western Reserve University) reporting this problem.
+
+-----------------------------------------------------
+version 1.0.3
+release date: 01/21/2007
+
+1. Updated lumiR and addNuId2lumi functions to allow them mapping TargetId or ProbeId to nuID;
+
+
+-----------------------------------------------------
+version 1.0.2
+release date: 01/01/2007
+
+1. Changed the S3 function "plot.lumiQC" as the S4 function "plot" with signature "LumiQC, missing";
+2. Added S4 function "hist" with signature "ExpressionSet";
+3. Added rownames duplication checking code in the "addNuId2lumi" and "lumiR" functions;
+4. Added varMetadata information in the LumiBatch object produced in "lumiR" function;
+5. Updated the help and tutorial files.
+
+Thanks Kevin Coombes (M.D. Anderson Cancer Center) for the testing and suggestions of the lumi package.
+
+-----------------------------------------------------
+version 1.0.1
+release date: 12/11/2006
+1. Updated the summary (show) functions of LumiBatch and LumiQC objects;
+2. Added subsetting code for the LumiQC and LumiBatch objects;
+3. Updated the help and tutorial files.
+
+Thanks Peter Bram (Leiden University Medical Center) for the testing and suggestions of the lumi package.
+
+-----------------------------------------------------
+version 1.0.0
+First release date: 12/05/2006

@@ -1,0 +1,27 @@
+citEntry(entry = "Article",
+         "author" = "Du, P., Kibbe, W.A. and Lin, S.M.",
+         "title" = "lumi: a pipeline for processing Illumina microarray",
+         journal = "Bioinformatics",
+         year = "2008",
+         publisher = "Oxford University Press",
+         address = "Oxford, UK",
+         textVersion = "Du, P., Kibbe, W.A. and Lin, S.M., 'lumi: a pipeline for processing Illumina microarray', Bioinformatics 2008 (Advance Access published online on May 8, 2008)"
+) 
+
+citEntry(entry = "Article",
+         "author" = "Lin, S.M., Du, P., Kibbe, W.A.",
+         "title" = "Model-based Variance-stabilizing Transformation for Illumina Microarray Data",
+         journal = "Nucleic Acids Res",
+         year = "2008",
+         publisher = "Oxford University Press",
+         address = "Oxford, UK",
+         textVersion = "Lin, S.M., Du, P., Kibbe, W.A., 'Model-based Variance-stabilizing Transformation for Illumina Microarray Data', Nucleic Acids Res. 2008 Jan 4"
+) 
+
+citEntry(entry = "Article",
+         "author" = "Du, P., Kibbe, W.A. and Lin, S.M.",
+         "title" = "nuID: A universal naming schema of oligonucleotides for Illumina, Affymetrix, and other microarrays",
+         journal = "Biology Direct",
+         year = "2007",
+         textVersion = "Du, P., Kibbe, W.A. and Lin, S.M., 'nuID: A universal naming schema of oligonucleotides for Illumina, Affymetrix, and other microarrays', Biology Direct 2007, 2:16 (31May2007)"
+) 

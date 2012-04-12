@@ -1,0 +1,482 @@
+% -*- mode: noweb; noweb-default-code-mode: R-mode; -*-
+%\VignetteIndexEntry{lumi}
+%\VignetteKeywords{Illumina, BeadArray, Microarray preprocessing}
+%\VignetteDepends{lumi, affy, Biobase}
+%\VignettePackage{lumi}
+
+%% 
+%% To use the 'cache' capabilities of weaver, 
+%% library("weaver"); Sweave("lumi_VST_evaluation.Rnw", driver=weaver)
+%%
+%%
+
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath,pstricks}
+\usepackage{hyperref}
+\usepackage[authoryear,round]{natbib}
+
+\newcommand{\Rfunction}[1]{{\texttt{#1}}}
+\newcommand{\Robject}[1]{{\texttt{#1}}}
+\newcommand{\Rpackage}[1]{{\textit{#1}}}
+\newcommand{\Rclass}[1]{{\textit{#1}}}
+\newcommand{\Rmethod}[1]{{\textit{#1}}}
+
+\SweaveOpts{keep.source=TRUE} 
+
+\author{Pan Du$^\ddagger$\footnote{dupan@northwestern.edu},  Simon Lin$^\ddagger$\footnote{s-lin2@northwestern.edu}}
+\begin{document}
+
+\setkeys{Gin}{width=1\textwidth} 
+
+\title{Evaluation of VST algorithm in lumi package}
+\maketitle
+\begin{center}$^\ddagger$Robert H. Lurie Comprehensive Cancer Center \\ Northwestern University, Chicago, IL, 60611, USA
+\end{center}
+
+\tableofcontents
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Introduction} 
+
+Variance stabilization is critical for the subsequent statistical inference to identify differential genes from microarray data. We devised a variance-stabilizing transformation (VST) by taking advantages of larger number of technical replicates available on the Illumina microarray. Here we use the Barnes data set, which has been packaged as lumiBarnes data package at the Bioconductor Experiment Data web page, to evaluate the VST algorithm. We will compare VST with popular base-2 logarithm transform and VSN method. To facilitate the comparison, we used popular quantile normalization for both VST and log2 transformed data.
+
+\section{Required packages and data preprocessing} 
+The evaluation requires the users to install packages: \Rpackage{lumi}, \Rpackage{vsn}, \Rpackage{genefilter}, \Rpackage{limma} and \Rpackage{lumiBarnes} (Experiment Data package). First, we need to load these packages:
+
+<<libraries,echo=TRUE,results=hide>>=
+library("lumi")
+library("vsn")
+library("genefilter")
+library("geneplotter")
+library("RColorBrewer")
+library("limma")
+library("lumiBarnes")
+set.seed(0xbadbeef)
+@
+
+\textbf{FIXME:}\textit{(wh says:) I think the main problem with this evaluation
+is seen in Figure~\ref{fig:techRep}: already just the plain old 
+log-transformation does a good job in variance stabilisation, so it will 
+be hard to convince readers (and reviewers) that the fancy arsinh/glog 
+transformation is necessary! What we de facto use for the Barnes data is the 
+limit case where $\mbox{glog}\approx\log$.}
+
+\textit{I think the differences between the different methods on the Barnes data
+are quite small and susceptible to small changes of how the comparison is done.
+I am not sure if any of the differences seen in the following (execpt for that to ``raw''
+are really substantial (=relevant for the practice).
+It would be much better to have an example dataset where a non-trivial (i.e. different
+from plain log) variance stabilising transformation is really necessary, where VST could
+really play out its strength!}
+
+Load the data and subset the arrays of interest: 
+<<load,echo=TRUE,results=hide>>=
+## Load the Barnes data set
+data("lumiBarnes")
+
+selChip = !is.na(lumiBarnes$pctBlood)
+x.lumi = lumiBarnes[, selChip]
+
+repl1   = which(x.lumi$replicate=="A")
+repl2   = which(x.lumi$replicate=="B")
+stopifnot(sum(selChip)==12L, length(repl1)==6L, length(repl2)==6L)
+@ 
+
+Preprocess:
+<<preprocess,echo=TRUE,results=hide,cache=TRUE>>=
+## VST transform and Quantile normalization
+x.lumi.vst <- lumiT(x.lumi)
+x.lumi.vst.quantile <- lumiN(x.lumi.vst, method='quantile')
+
+
+## log2 transform and Quantile normalization
+x.lumi.log <- lumiT(x.lumi, method='log2')
+x.lumi.log.quantile <- lumiN(x.lumi.log, method='quantile')
+
+
+## VSN normalization: use lts.quantile=0.5 since in the blood/placenta
+##  comparison more genes are differentially expressed than what is
+##   expected by the default of 0.9.
+x.lumi.vsn <- lumiN(x.lumi, method='vsn', lts.quantile=0.5)
+
+normDataList <- list('Raw.Log2'=exprs(x.lumi.log), 
+                     'VST.Quantile'=exprs(x.lumi.vst.quantile), 
+                     'Log2.Quantile'=exprs(x.lumi.log.quantile),
+	             'VSN'=exprs(x.lumi.vsn))
+
+## scatter plots: 
+## library("geneplotter")
+## pairs(exprs(x.lumi.vsn), panel=function(...){par(new=TRUE);smoothScatter(..., nrpoints=0)})
+@
+  
+
+
+
+  
+\section{Evaluation of the VST algorithm} 
+
+\subsection{Correlation between the technical replicate microarrays} 
+A good preprocessing method will improve the correlation between the technical replicate microarrays. Here will calculate the correlation between six pairs of technical replicate chips and plot them as the box plot, as shown in Figure \ref{fig:chipCor}. We can see VST...
+%
+<<chipCorList>>=
+## Check the correlation between technique replicates
+chipCorList = matrix(as.numeric(NA), nrow=length(repl1), ncol=length(normDataList))
+colnames(chipCorList)= names(normDataList)
+
+for (i in seq(along=normDataList))
+  for (j in seq(along=repl1))
+    chipCorList[j,i] = cor(normDataList[[i]][, c(repl1[j], repl2[j])])[1,2]
+@
+
+\begin{figure}
+\centering
+<<figboxplot,fig=TRUE, width=10, height=10, quiet=TRUE, echo=FALSE>>=
+labels <- colnames(chipCorList)
+## set the margin of the plot
+mar <- c(max(nchar(labels))/2 + 4.5, 5, 5, 3)
+oldpar = par(xaxt='n', mar=mar)
+boxplot(chipCorList ~ col(chipCorList),  xlab='', 
+        ylab='Correlation between technique replicate chips',
+        col='skyblue')
+par(xaxt='s')
+axis(1, at=1:ncol(chipCorList), labels=labels, tick=TRUE, las=2)
+par(oldpar)
+@
+\caption{Correlation between technique replicate chips after preprocessing}
+\label{fig:chipCor}
+\end{figure} 
+
+\subsection{Variance stabilizing between the technique replicate microarrays} 
+A good variance stabilizing method should stabilize the variance between the technique replicates. Here we plot the mean and standard deviation relations between a pair of technique replicates, as shown in Figure \ref{fig:techRep}. Users can select other pairs of replicates and plot the pictures.
+
+
+\begin{figure}
+\centering
+<<figmeanSdPlot,fig=TRUE, width=10, height=10, quiet=TRUE, echo=TRUE>>=
+## select the technique replicates
+selChip <-  c(repl1[1],repl2[1]) # c(4, 12)
+oldpar=par(mfrow=c(2,2))
+for (i in 1:length(normDataList)) {
+  meanSdPlot(normDataList[[i]][, selChip], ylab='Standard deviation',
+      main=names(normDataList)[i], ylim=c(0,1)) ## the same as above
+  ##dataMatrix.i <- normDataList[[i]]
+  ##u <- rowMeans(dataMatrix.i[, selChip])
+  ##std <- apply(dataMatrix.i[, selChip], 1, sd)
+  ##plot(u, std, xlab='Mean', ylab='Standard deviation', 
+  ##   pch='.', cex=1, main=names(normDataList[i]))
+}
+par(oldpar)
+@
+\caption{Mean and standard deviation relations of the technical replicate 
+microarrays \Sexpr{sampleNames(x.lumi)[selChip[1]]} and
+\Sexpr{sampleNames(x.lumi)[selChip[2]]}.}
+\label{fig:techRep}
+\end{figure} 
+
+\subsection{Evaluation based on the identification of differentially expressed genes} 
+Next, we want to evaluate the VST algorithm based on the detection of differentially expressed genes. Solely for the purpose of comparing the results between the different preprocessing methods, we first use a t-test to calculate the p-values for all the results for its simplicity and clear probabilistic meaning. We will also use \Rpackage{limma} to identify the differentially expressed genes at the end of this document.
+
+<<fitList.ttest>>=
+## t-test to estimate p-values
+sampleInfo <- pData(phenoData(x.lumi))
+sampleType <- paste(sampleInfo[,'pctBlood'], sampleInfo[,'pctPlacenta'], sep=':')
+sampleType <- paste('c', sampleType, sep='')
+presentCount <- detectionCall(x.lumi, Th=0.99)
+## Comparing index
+## used in the paper (the most challenging comparison):
+compareInd <- c(repl1[1:2], repl2[1:2])  	
+# compareInd <- c(1,6,9,14)	## additional example
+compareType <- sampleType[compareInd]
+fitList.ttest <- NULL
+for (i in 1:length(normDataList)) {
+	selDataMatrix <- normDataList[[i]]
+	selDataMatrix <- selDataMatrix[presentCount > 0, ]
+	selProbe <- rownames(selDataMatrix)
+	compareMatrix <- selDataMatrix[, compareInd]
+	
+	## sample means
+	sampleMean <- NULL
+	for (sample.j in unique(compareType)) {
+		m.j <- rowMeans(compareMatrix[, compareType == sample.j])
+		sampleMean <- cbind(sampleMean, m.j)
+	}
+	colnames(sampleMean) <- unique(compareType)
+	foldChange <- sampleMean[,1] - sampleMean[,2]
+	names(foldChange) <- selProbe
+
+	fit <- rowttests(compareMatrix, factor(compareType))
+	names(fit$statistic) <- selProbe
+	names(fit$p.value) <- selProbe
+	fit$foldChange <- foldChange
+	fitList.ttest <- c(fitList.ttest, list(fit))
+}
+names(fitList.ttest) <- names(normDataList)
+@
+
+First we want to check the number of significant probes with different p-value cut-offs. We can see VST-Quantile method has the highest number of significant genes. However, solely based on this criterium is not enough. The identified genes could be false positives. Next, we will try to measure the false positive rate.
+<<thresh,echo=TRUE>>=
+## estimate the number of significant genes with different p-value cut-off
+pValueTh <- 0.01
+sapply(fitList.ttest, function(x) length(which(x$p.value < pValueTh)))
+@
+
+
+ A recent publication from the MAQC project reinforces a finding in the literature that probe measurements with low intensities and low fold-changes (even with significant p-values) are likely to be false positives. This indicates that a further evaluation combining fold-changes and p-values is required to control the false positive identification rate. As different preprocessing and normalization methods result in different scaling factors for the processed data, using the same fold-change cutoff for different preprocessing methods is inappropriate. To solve this problem, we evaluated the algorithms based on the percentage of probes with significant p-values among the top number of probes, which are ranked by their absolute values of fold-change. This criterion assumes that probes with high fold-changes as well as significant p-values are more likely to be true positives. Figure \ref{fig:foldChangePvalue} shows the comparison of different methods based on this criterion. For this comparison, we considered a gene to be statistically significant when the t-test p-values are less than 0.001. Stricter or looser p-value cutoffs were also evaluated. We can see the VST-Quantile method outperformed the other methods, and this was true regardless of the p-value cutoff chosen.
+ 
+<<sigNumMatrix>>=
+## Plot the curve of high fold-change and p-value
+topGeneNum <- seq(10, 500, by=20) # round(10*(1.5^(0:10)))
+sigNumMatrix <- NULL
+pValueTh <-   0.001	# 0.0001 # 
+fitList <- fitList.ttest
+for (i in seq(along=fitList)) {
+	p.value.i <- fitList[[i]]$p.value
+	foldChange.i <- fitList[[i]]$foldChange
+	probeList <- names(foldChange.i)
+	topProbe <- probeList[order(p.value.i)][1:500]
+	## sort the probes according to fold change
+	ord <- order(abs(foldChange.i), decreasing=T)
+	probeList <- probeList[ord]
+	foldChange.i <- foldChange.i[ord]
+	p.value.i <- p.value.i[ord]
+
+	sigNum.i <- NULL	
+	for (num.j in topGeneNum) {
+		selProbe.j <- probeList[1:num.j]
+		#sigNum.i <- c(sigNum.i, length(which(selProbe.j %in% topProbe)))
+		sigNum.i <- c(sigNum.i, length(which(p.value.i[selProbe.j] < pValueTh)))
+	}
+	sigNumMatrix <- cbind(sigNumMatrix, sigNum.i)
+}
+rownames(sigNumMatrix) <- topGeneNum
+colnames(sigNumMatrix) <- names(fitList)
+@
+
+\begin{figure}
+\centering
+<<figfoldChangePvalue,fig=true, width=10, height=10, quiet=T, echo=T>>=
+pcol = brewer.pal(9, "Set1")[c(9, 1, 3, 2)]
+plty = seq(along=fitList)
+plwd = 1.5
+
+matplot(topGeneNum, (100 * sigNumMatrix/(topGeneNum %*% t(rep(1,ncol(sigNumMatrix))))), ylim=c(0,100), type='l', xlab='Number of genes with the highest fold-changes', ylab=paste('Percentage of genes with p-value <', pValueTh), lty=plty, col=pcol, lwd=plwd)
+
+legend(x=360, y=95, legend=colnames(sigNumMatrix), lty=plty, col=pcol, lwd=plwd)
+@
+\caption{The percentage of identified differentially expressed genes (with raw p-values less than 0.001) among the genes with the highest fold-changes}
+\label{fig:foldChangePvalue}
+\end{figure} 
+
+
+Beyond p-value and fold-change criteria, we further evaluated the methods based on the concordance of normalized intensity profile and real dilution profile of the selected probes. 
+Following Barnes et al. (2005), we defined a concordant probe as a signal from a probe with a correlation coefficient larger than 0.8 between the normalized intensity profile and the real dilution profile (five dilution ratios with two replicates at each dilution). If a selected differentially expressed probe is also a concordant one, it is more likely to be truly differentially 
+expressed. Following Guo et al. (Nature Biotechnology, 24:1162-1169, 2006), the differentially expressed probes were selected by ranking the probes' absolute fold-changes from high to low and with a p-value cutoff of 0.01. Figure \ref{fig:profileConcordance} shows the percentage of concordant probes among the selected probes. We can see the VST.Quantile method is obviously better than other methods.
+
+<<corrtopdiff,echo=TRUE>>=
+## Check the correlation of the top differentiated genes
+fitList <- fitList.ttest
+topNumList <- c(30, seq(35, 500, by=30))
+corTh <- 0.8
+corrList <- NULL
+highCorrNumMatrix <- NULL
+for (i in 1:length(fitList)) {
+	probeList <- names(fitList[[i]]$p.value)
+	fc.i <- fitList[[i]]$foldChange
+	## only keep the probes with p.value < 0.01
+	selInd <- which(fitList[[i]]$p.value < 0.01)
+	ordProbe.i <- probeList[selInd][order(abs(fc.i[selInd]), decreasing=T)]
+	selDataMatrix <- normDataList[[i]][ordProbe.i, ]
+
+	modelProfile1 <- c(100, 95, 75, 50, 25, 0, 100, 95, 75, 50, 25, 0)
+	profileMatrix <- selDataMatrix
+	corr1 <- apply(profileMatrix, 1, cor, y=modelProfile1)
+	names(corr1) <- ordProbe.i
+	matchNum.j <- NULL
+	for (topNum.j in topNumList) {
+		topProbe.j <- ordProbe.i[1:topNum.j]
+		matchNum.j <- c(matchNum.j, length(which(abs(corr1[topProbe.j]) > corTh)))
+	}
+	highCorrNumMatrix <- cbind(highCorrNumMatrix, matchNum.j)
+	corrList <- c(corrList, list(c(list(corr1))))
+}
+rownames(highCorrNumMatrix) <- topNumList
+colnames(highCorrNumMatrix) <- names(corrList) <- names(fitList)
+@
+
+\begin{figure}
+\centering
+<<figprofileConcordance,fig=true, width=10, height=10, quiet=T, echo=T>>=
+matplot(topNumList, (100 * highCorrNumMatrix/(topNumList %*% t(rep(1,ncol(highCorrNumMatrix))))),
+ 	type='l', xlab='Number of genes selected as differentially expressed', 
+	ylab='Expression and dilution profiles concordance (%)', 
+        lty=plty, col=pcol, lwd=plwd, ylim=c(0,100))
+legend(x=350, y=50, legend=colnames(highCorrNumMatrix), lty=plty, col=pcol, lwd=plwd)
+@
+\caption{The concordance between the expression and dilution profiles of the selected differentially expressed genes}
+\label{fig:profileConcordance}
+\end{figure} 
+
+
+\subsection{Identification of differentially expressed genes by using limma package} 
+
+The method in \Rpackage{limma} package selects differential expressed genes elegantly balanced the two criteria used by Guo et al. (Nature Biotechnology, 24:1162-1169, 2006): a bigger fold change and a larger canonical t-test score. Also, as the method in \Rpackage{limma} package adds an offset standard deviation by an empirical Bayesian method in calculating the t-score, the problem of selecting high fold-change probes at low expression range can be alleviated. Therefore, we will also select the differentially expressed probes based on the p-values estimated by the Bioconductor \Rpackage{limma} package. To better evaluate the overall performance, we first ranked the probes with their p-values from low to high, then calculate the percentage of concordant probes among different number of top probes, as shown in Figure \ref{fig:limmaConcordance}. The result indicates that VST-quantile outperforms Log2.Quantile in terms of the concordance evaluation, regardless of the gene selection method (Guo method or limma).
+
+
+
+Identify the differentially expressed genes by using limma package:
+<<fitList.limma,echo=TRUE>>=
+## Select the comparing chip index
+compareType <- sampleType[compareInd]
+fitList.limma <- NULL
+for (i in 1:length(normDataList)) {
+	selDataMatrix <- normDataList[[i]]
+	selDataMatrix <- selDataMatrix[presentCount > 0, ]
+	selProbe <- rownames(selDataMatrix)
+	compareMatrix <- selDataMatrix[, compareInd]
+	
+	design <- model.matrix(~ 0 + as.factor(compareType))
+	colnames(design) <- c('A', 'B')
+	fit1 <- lmFit(compareMatrix, design)
+	contMatrix <- makeContrasts('A-B'=A - B, levels=design)
+	fit2 <- contrasts.fit(fit1, contMatrix)
+	fit <- eBayes(fit2)
+	fitList.limma <- c(fitList.limma, list(fit))
+}
+names(fitList.limma) <- names(normDataList)
+@
+
+Estimate the number of concordance genes (a probe with a correlation coefficient larger than 0.8 between the normalized intensity profile and the real dilution profile (five dilution ratios with two replicates at each dilution)) among the top differentially expressed genes (ranked based on p-values estimated by \Rpackage{limma}).:
+
+<<highCorrNumMatrix,echo=TRUE, quite=T>>=
+## Check the correlation of the top differentiated genes based on the limma results 
+## rank the genes based on the p-values of limma result
+fitList <- fitList.limma
+topNumList <- c(30, seq(35, 500, by=30))
+corTh <- 0.8
+corrList <- NULL
+highCorrNumMatrix <- NULL
+for (i in 1:length(fitList)) {
+	probeList <- rownames(fitList[[i]]$p.value)
+	fc.i <- fitList[[i]]$coef[,1]
+	ordProbe.i <- probeList[order(abs(fitList[[i]]$p.value[,1]), decreasing=F)]
+
+	selDataMatrix <- normDataList[[i]][ordProbe.i, ]
+
+	modelProfile1 <- c(100, 95, 75, 50, 25, 0, 100, 95, 75, 50, 25, 0)
+	profileMatrix <- selDataMatrix
+	corr1 <- apply(profileMatrix, 1, cor, y=modelProfile1)
+	names(corr1) <- ordProbe.i
+	matchNum.j <- NULL
+	for (topNum.j in topNumList) {
+		topProbe.j <- ordProbe.i[1:topNum.j]
+		matchNum.j <- c(matchNum.j, length(which(abs(corr1[topProbe.j]) > corTh)))
+	}
+	highCorrNumMatrix <- cbind(highCorrNumMatrix, matchNum.j)
+	corrList <- c(corrList, list(c(list(corr1))))
+}
+rownames(highCorrNumMatrix) <- topNumList
+colnames(highCorrNumMatrix) <- names(corrList) <- names(fitList)
+@
+
+\begin{figure}
+\centering
+<<fig=true, width=10, height=10, quiet=T, echo=T>>=
+matplot(topNumList, (100 * highCorrNumMatrix/(topNumList %*% t(rep(1,ncol(highCorrNumMatrix))))),
+ 	type='l', xlab='Number of genes selected as differentially expressed', 
+	ylab='Expression and dilution profiles concordance (%)', 
+        lty=plty, col=pcol, lwd=plwd, ylim=c(0,100))
+legend(x=350, y=50, legend=colnames(highCorrNumMatrix), lty=plty, col=pcol, lwd=plwd)
+@
+\caption{The concordance between the expression and dilution profiles of the selected differentially expressed genes}
+\label{fig:limmaConcordance}
+\end{figure} 
+
+
+\subsection{Variation within replicates vs variation between conditions}
+To assess the signal to noise ratio, we assess
+\[
+\frac{\sigma^2_{\mbox{\scriptsize between groups}}}{\sigma^2_{\mbox{\scriptsize within groups}}}.
+\]
+For two groups, this can be measured by the $t$-statistic, for $n$ groups, 
+by its generalisation, the $F$-statistic.
+%
+<<fstatistic>>=
+fac1 = fac2 = factor(paste(x.lumi$pctBlood, x.lumi$pctPlacenta, sep=":"))
+fac1[c(3:6, 9:12)] = NA
+fac1=factor(fac1) ## drop unused levels
+fac1
+fac2
+
+rf = list(
+  "a) t-tests" = lapply(normDataList, rowttests, fac=fac1),
+  "b) F-tests" = lapply(normDataList, rowFtests, fac=fac2)
+)
+@ 
+<<figfstat,fig=TRUE,include=FALSE,width=9,height=4.8>>=
+oldpar=par(mfrow=c(1,2))
+for(i in seq(along=rf))
+  multiecdf(lapply(rf[[i]], "[[", "p.value"), xlim=c(0,0.1), 
+   col=pcol, lty=plty, lwd=plwd,
+   main=paste(names(rf)[i], "p-value"), xlab="p", ylab="F(p)")
+legend(0.1, 0.0, names(normDataList), lwd=plwd, lty=plty, col=pcol, 
+   xjust=1, yjust=0)
+par(oldpar)
+@ 
+The result is shown in Figure~\ref{fig:fstat}.
+
+\begin{figure}[t]
+\includegraphics[width=\textwidth]{lumi_VST_evaluation-figfstat}
+\caption{\label{fig:fstat}Cumulative distribution functions of $p$-values obtained 
+from a) reporter-wise $t$-tests (by factor \Robject{fac1}) 
+and b) $F$-tests (by factor \Robject{fac2}). 
+These are monotonous measures of the ratio between variation within replicates 
+and variation between conditions, or in other words, the signal-to-noise ratio.}
+\end{figure}
+
+\subsection{Correlation with blood-placenta ratio}
+We compute, for each reporter and for each of the \Sexpr{length(normDataList)}
+transformation methods, the Spearman rank correlation between the
+blood-placenta ratio and the expression estimate. A non-parametruc, rank-based
+correlation measure is used since due to the log  or glog transformation
+we do not expect a linear relationship.
+
+<<corbloodplacenta>>=
+cc =   lapply(normDataList, function(mat)
+   cor(x.lumi$pctBlood, t(mat)))
+@ 
+<<figcorr,fig=TRUE,include=FALSE,width=9,height=4.8>>=
+oldpar=par(mfrow=c(1,2))
+for(i in c(-1,1))
+  multiecdf(cc, xlim=sort(i*c(0.8,1)), col=pcol, lty=plty, lwd=plwd,
+            main=paste(ifelse(i<0,"a) negative","b) positive"),"correlations"), 
+            xlab=expression(rho), ylab=expression(F(rho)))
+legend(par("usr")[2], par("usr")[3], 
+     names(normDataList), lwd=plwd, lty=plty, col=pcol, xjust=1, yjust=0)
+par(oldpar)
+@ 
+The result is shown in Figure~\ref{fig:corr}.
+
+\begin{figure}[t]
+\includegraphics[width=\textwidth]{lumi_VST_evaluation-figcorr}
+\caption{\label{fig:corr}Cumulative distribution functions of Spearman correlation $\rho$
+between blood-placenta ratio for the \Sexpr{ncol(x.lumi)} arrays and the 
+expression estimates. Panel a) shows the distributions of negative correlations
+(expected for genes that are higher expressed in placenta) and panel b) 
+of positive correlations
+(expected for genes that are higher expressed in blood).}
+\end{figure}
+
+\section{Conclusion}
+
+The users can select different samples for comparison and change the cutoff p-values in the evaluation. The results should be similar, i.e., the VST algorithm is better than the log2 transformation and VSN for this evaluation data set.  
+
+%\bibliographystyle{plainnat}
+%\bibliography{lumi}
+
+\section{Session Info}
+<<sessionInfo, results=tex, print=TRUE>>=
+toLatex(sessionInfo())
+@ 
+
+\end{document}
