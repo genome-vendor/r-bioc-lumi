@@ -690,7 +690,7 @@ toLatex(sessionInfo())
 
 
 \section{Acknowledgments}
-We would like to thanks the users and researchers around the world contribute to the lumi package, provide great comments and suggestions and report bugs. Especially, we would like  to thanks Michal Blazejczyk, Peter Bram, Ligia Bras, Vincent Carey, Kevin Coombes, Sean Davis, Jean-Eudes DAZARD, Ryan Gordon, Wolfgang Huber, DeokHoon Kim, Matthias Kohl, Danilo Licastro, Ezhou Lori Long, Renee McElhaney, Martin Morgan, Ingrid H. G. ¯stense,  Denise Scholtens, Wei Shi, Gordon Smyth,  Michael Stevens, Jiexin Zhang (sorted by last name) and many other people not mentioned here.    
+We would like to thanks the users and researchers around the world contribute to the lumi package, provide great comments and suggestions and report bugs. Especially, we would like  to thanks Michal Blazejczyk, Peter Bram, Ligia Bras, Vincent Carey, Kevin Coombes, Sean Davis, Jean-Eudes DAZARD, Ryan Gordon, Wolfgang Huber, DeokHoon Kim, Matthias Kohl, Danilo Licastro, Ezhou Lori Long, Renee McElhaney, Martin Morgan, Ingrid H. G. stense,  Denise Scholtens, Wei Shi, Gordon Smyth,  Michael Stevens, Jiexin Zhang (sorted by last name) and many other people not mentioned here.    
 
 
 \section{References}
